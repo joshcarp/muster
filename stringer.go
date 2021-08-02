@@ -166,6 +166,8 @@ func (f *File) genDecl(node ast.Node) bool {
 		return true
 	}
 	tmpl := `
+
+{{if not .Recv }}
 func Must{{.Name.Name}}({{ range $i, $e := .Type.Params.List }}param{{$i}} {{ $e.Type }}, {{end}}){{(index .Type.Results.List 0).Type}}{
 	val, err := {{.Name.Name}}({{ range $i, $e := .Type.Results.List }}param{{$i}}, {{end}})
 	if err != nil {
@@ -173,7 +175,18 @@ func Must{{.Name.Name}}({{ range $i, $e := .Type.Params.List }}param{{$i}} {{ $e
 	}
 	return val
 }
+{{else}}
+// 
+func (recv {{ (index .Recv.List 0).Type }} ) Must{{.Name.Name}}({{ range $i, $e := .Type.Params.List }}param{{$i}} {{ $e.Type }}, {{end}}){{(index .Type.Results.List 0).Type}}{
+	val, err := recv.{{.Name.Name}}({{ range $i, $e := .Type.Results.List }}param{{$i}}, {{end}})
+	if err != nil {
+		panic(err)
+	}
+	return val
+}
+{{end}}
 `
+	//decl.Recv.List 0).Type }}
 	tmplate := template.Must(template.New("").Parse(tmpl))
 	tmplate.Execute(&f.buf, decl)
 	return false
