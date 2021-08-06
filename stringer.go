@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"go/ast"
 	"go/format"
+	"go/printer"
+	"go/token"
 	"go/types"
 	"io/ioutil"
 	"log"
@@ -13,6 +15,7 @@ import (
 	"strings"
 	"text/template"
 
+	"github.com/iancoleman/strcase"
 	"golang.org/x/tools/go/packages"
 )
 
@@ -61,6 +64,7 @@ func main() {
 // the output for format.Source.
 type Generator struct {
 	Pkg         *Package // Package we are scanning.
+	Fset        *token.FileSet
 	trimPrefix  string
 	lineComment bool
 }
@@ -70,6 +74,7 @@ type File struct {
 	buf     bytes.Buffer // Accumulated output.
 	pkg     *Package     // Package to which this file belongs.
 	file    *ast.File    // Parsed AST.
+	fset    *token.FileSet
 	imports []string
 }
 
@@ -101,16 +106,18 @@ func (g *Generator) parsePackage(patterns []string, tags []string) {
 
 // addPackage adds a type checked Package and its syntax files to the generator.
 func (g *Generator) addPackage(pkg *packages.Package) {
+
 	g.Pkg = &Package{
 		Name:  pkg.Name,
 		defs:  pkg.TypesInfo.Defs,
 		Files: make([]*File, len(pkg.Syntax)),
 	}
-
+	g.Fset = pkg.Fset
 	for i, file := range pkg.Syntax {
 		g.Pkg.Files[i] = &File{
 			file: file,
 			pkg:  g.Pkg,
+			fset: pkg.Fset,
 		}
 	}
 }
@@ -165,29 +172,49 @@ func (f *File) genDecl(node ast.Node) bool {
 	if len(decl.Type.Results.List) != 2 {
 		return true
 	}
-	tmpl := `
-
-{{if not .Recv }}
-func Must{{.Name.Name}}({{ range $i, $e := .Type.Params.List }}param{{$i}} {{ $e.Type }}, {{end}}){{(index .Type.Results.List 0).Type}}{
-	val, err := {{.Name.Name}}({{ range $i, $e := .Type.Results.List }}param{{$i}}, {{end}})
+	a := Function{Name: decl.Name.Name}
+	for _, e := range decl.Type.Params.List {
+		a.Params = append(a.Params, Param{
+			Name: fmt.Sprintf("%s", e.Names[0].Name),
+			Type: NodeAsString(f.fset, e.Type),
+		})
+	}
+	for _, e := range decl.Type.Results.List {
+		a.Returns = append(a.Returns, Return{
+			Type: NodeAsString(f.fset, e.Type),
+		})
+	}
+	if decl.Recv != nil && len(decl.Recv.List) > 0 {
+		a.Recv.Type = NodeAsString(f.fset, decl.Recv.List[0].Type)
+		a.Recv.Name = NodeAsString(f.fset, decl.Recv.List[0].Names[0])
+	}
+	var must Function
+	switch a.IsExported() {
+	case true:
+		must.Name = "Must" + a.Name
+	case false:
+		must.Name = "must" + strcase.ToCamel(a.Name)
+	}
+	must.Returns = append(must.Returns, a.Returns[0])
+	must.Params = a.Params
+	must.Recv = a.Recv
+	var err error
+	must.Body, err = WithTemplate(
+		`val, err := {{if ne .Recv.Name ""}}{{.Recv.Name}}.{{end}}{{.Name}}({{ range $i, $e := .Params }}{{$e.Name}}, {{end}})
 	if err != nil {
 		panic(err)
 	}
-	return val
-}
-{{else}}
-// 
-func (recv {{ (index .Recv.List 0).Type }} ) Must{{.Name.Name}}({{ range $i, $e := .Type.Params.List }}param{{$i}} {{ $e.Type }}, {{end}}){{(index .Type.Results.List 0).Type}}{
-	val, err := recv.{{.Name.Name}}({{ range $i, $e := .Type.Results.List }}param{{$i}}, {{end}})
+	return val`, a)
 	if err != nil {
 		panic(err)
 	}
-	return val
-}
-{{end}}
-`
-	//decl.Recv.List 0).Type }}
-	tmplate := template.Must(template.New("").Parse(tmpl))
-	tmplate.Execute(&f.buf, decl)
+	f.buf.Write([]byte(must.String()))
 	return false
+}
+
+func NodeAsString(fset *token.FileSet, v interface{}) string {
+	var b bytes.Buffer
+	printer.Fprint(&b, fset, v)
+	br := b.String()
+	return br
 }
