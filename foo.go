@@ -8,8 +8,9 @@ import (
 type Foo struct {
 }
 
-func (f Foo) BlahWithRecv(s int, a Foo) (int, error) {
-	return 0, fmt.Errorf("")
+func (f Foo) BlahWithRecv(s int, a *Foo) (*int, error) {
+	b := 0
+	return &b, fmt.Errorf("")
 }
 
 func Blah(s int, a Foo) (int, error) {

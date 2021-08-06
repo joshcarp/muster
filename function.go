@@ -4,10 +4,8 @@ import (
 	"bytes"
 	"fmt"
 	"go/ast"
-	"go/format"
 	"go/printer"
 	"go/token"
-	"log"
 	"text/template"
 	"unicode"
 
@@ -112,7 +110,7 @@ func {{.Recv}}{{.Name}}({{.Params}})({{.Returns}}){
 	if err != nil {
 		panic(err)
 	}
-	return FormatCode(str)
+	return formatCode(str)
 }
 
 func WithTemplate(tmplstr string, data interface{}, funcs ...interface{}) (string, error) {
@@ -149,14 +147,3 @@ func extraFuncs(m map[string]interface{}, funcs ...interface{}) error {
 	return nil
 }
 
-func FormatCode(buf string) string {
-	src, err := format.Source([]byte(buf))
-	if err != nil {
-		// Should never happen, but can arise when developing this code.
-		// The user can compile the output to see the error.
-		log.Printf("warning: internal error: invalid Go generated: %s", err)
-		log.Printf("warning: compile the package to analyze the error")
-		return buf
-	}
-	return string(src)
-}
