@@ -3,12 +3,43 @@ package main
 import (
 	"bytes"
 	"fmt"
-	"github.com/Masterminds/sprig"
+	"go/ast"
 	"go/format"
+	"go/printer"
+	"go/token"
 	"log"
 	"text/template"
 	"unicode"
+
+	"github.com/Masterminds/sprig"
 )
+
+func FromDecl(decl *ast.FuncDecl, fset *token.FileSet) Function {
+	a := Function{Name: decl.Name.Name}
+	for _, e := range decl.Type.Params.List {
+		a.Params = append(a.Params, Param{
+			Name: fmt.Sprintf("%s", e.Names[0].Name),
+			Type: NodeAsString(fset, e.Type),
+		})
+	}
+	for _, e := range decl.Type.Results.List {
+		a.Returns = append(a.Returns, Return{
+			Type: NodeAsString(fset, e.Type),
+		})
+	}
+	if decl.Recv != nil && len(decl.Recv.List) > 0 {
+		a.Recv.Type = NodeAsString(fset, decl.Recv.List[0].Type)
+		a.Recv.Name = NodeAsString(fset, decl.Recv.List[0].Names[0])
+	}
+	return a
+}
+
+func NodeAsString(fset *token.FileSet, v interface{}) string {
+	var b bytes.Buffer
+	printer.Fprint(&b, fset, v)
+	br := b.String()
+	return br
+}
 
 type Param struct {
 	Name string
@@ -59,6 +90,7 @@ func (f Reciever) String() string {
 type Function struct {
 	Name    string
 	Body    string
+	Comment string
 	Recv    Reciever
 	Params  Params
 	Returns Returns
@@ -72,7 +104,8 @@ func (f Function) IsExported() bool {
 
 }
 func (f Function) String() string {
-	str, err := WithTemplate(`func {{.Recv}}{{.Name}}({{.Params}})({{.Returns}}){
+	str, err := WithTemplate(`{{.Comment}}
+func {{.Recv}}{{.Name}}({{.Params}})({{.Returns}}){
 	{{.Body}}
 }
 `, f)

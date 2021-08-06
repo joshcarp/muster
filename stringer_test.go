@@ -2,32 +2,33 @@ package main
 
 import (
 	"fmt"
-	"github.com/davecgh/go-spew/spew"
 	"time"
+
+	"github.com/davecgh/go-spew/spew"
 )
 
 type Foo2 struct {
 	A time.Time
 }
-func ExampleFunction2(){
-	spew.Print(Foo2{A:time.Now()})
+
+func ExampleFunction2() {
+	spew.Print(Foo2{A: time.Now()})
 	//output:
 
-
 }
-func ExampleFunction(){
+func ExampleFunction() {
 	f := Function{
-		Name:    "Foobar",
-		Body:    `a, err := foo()
+		Name: "Foobar",
+		Body: `a, err := foo()
 if err != nil {
 	panic(err)
 }
 return a`,
-		Recv:    Reciever{
+		Recv: Reciever{
 			Type: "",
 			Name: "",
 		},
-		Params:  Params{{
+		Params: Params{{
 			Name: "a",
 			Type: "string",
 		}},
@@ -38,6 +39,5 @@ return a`,
 	}
 	fmt.Println(f)
 	//output:
-
 
 }

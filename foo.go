@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	foobar "github.com/googleapis/gax-go/v2"
 )
 
 type Foo struct {
@@ -18,4 +19,10 @@ func Blah(s int, a Foo) (int, error) {
 func Blah3(s int, a Foo) (Foo, error) {
 	return Foo{}, fmt.Errorf("")
 }
+
+func MustSpannerBlah3(s foobar.Backoff, a Foo) (Foo, error) {
+	return Foo{}, fmt.Errorf("")
+}
+
+
 
