@@ -1,18 +1,14 @@
 # Muster
-Sometimes it's annoying to create test structs when you need to pupulate a field with a function that returns (value, error).
+
 muster is for API developers to automatically generate Must functions for any function that returns a value and an error.
+
+Sometimes it's annoying to create test structs when you need to populate a field with a function that returns (value, error).
 
 ## Install 📥
 
 ```bash
 go get github.com/joshcarp/muster
 ```
-
-## Features 💯
-- [x] Specify more than one file
-- [x] Input from stdin
-- [x] Works with methods
-- [x] Works with external types
 
 ## Problem 🔥
 ```go
@@ -61,3 +57,11 @@ func MustBlah(s int, a Foo) int {
     return val
 }
 ```
+
+## Features 💯
+- [x] Specify more than one file
+- [x] Input from stdin
+- [x] Works with methods
+- [x] Works with external types
+- [x] Include regex
+- [x] Exclude regex
