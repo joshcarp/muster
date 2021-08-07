@@ -4,15 +4,19 @@ import (
 	"bytes"
 	"fmt"
 	"go/ast"
+	"go/format"
 	"go/printer"
 	"go/token"
+	"log"
 	"text/template"
 	"unicode"
+
+	"golang.org/x/tools/imports"
 
 	"github.com/Masterminds/sprig"
 )
 
-func FromDecl(decl *ast.FuncDecl, fset *token.FileSet) Function {
+func FunctionFromDecl(decl *ast.FuncDecl, fset *token.FileSet) Function {
 	a := Function{Name: decl.Name.Name}
 	for _, e := range decl.Type.Params.List {
 		a.Params = append(a.Params, Param{
@@ -37,6 +41,12 @@ func NodeAsString(fset *token.FileSet, v interface{}) string {
 	printer.Fprint(&b, fset, v)
 	br := b.String()
 	return br
+}
+
+func NodeAsStringFunc(fset *token.FileSet) func(v interface{}) string {
+	return func(v interface{}) string {
+		return NodeAsString(fset, v)
+	}
 }
 
 type Param struct {
@@ -119,7 +129,7 @@ func WithTemplate(tmplstr string, data interface{}, funcs ...interface{}) (strin
 	if err != nil {
 		return "", err
 	}
-	tmpl, err := template.New("anzdata").
+	tmpl, err := template.New("").
 		Funcs(map[string]interface{}(funcmap)).
 		Parse(tmplstr)
 	if err != nil {
@@ -147,3 +157,23 @@ func extraFuncs(m map[string]interface{}, funcs ...interface{}) error {
 	return nil
 }
 
+// importCode returns the gofmt-ed contents of the Generator's buffer.
+func importCode(buf string) (string, error) {
+	src, err := imports.Process("", []byte(buf), nil)
+	if err != nil {
+		return "", err
+	}
+	return string(src), nil
+}
+
+func formatCode(buf string) string {
+	src, err := format.Source([]byte(buf))
+	if err != nil {
+		// Should never happen, but can arise when developing this code.
+		// The user can compile the output to see the error.
+		log.Printf("warning: internal error: invalid Go generated: %s", err)
+		log.Printf("warning: compile the package to analyze the error")
+		return buf
+	}
+	return string(src)
+}
