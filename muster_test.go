@@ -5,6 +5,9 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func ExampleFunction() {
@@ -41,6 +44,7 @@ func Test_methodStream(t *testing.T) {
 		name       string
 		args       args
 		wantWriter string
+		wantErr    string
 	}{
 		{
 			name: "simple",
@@ -179,11 +183,27 @@ func MustMustSpannerBlah3(s foobar.Backoff, a Foo) Foo {
 }
 `,
 		},
+		{
+			name: "no-functions",
+			args: args{
+				reader: `package main
+
+func Blah(s int, a Foo) (int) {
+	return 0
+}
+`,
+			},
+			wantErr: `unable to generate file`,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			writer := &bytes.Buffer{}
-			methodStream(strings.NewReader(tt.args.reader), writer)
+			err := methodStream(strings.NewReader(tt.args.reader), writer)
+			if tt.wantErr != "" || err != nil {
+				require.Error(t, err)
+				assert.EqualError(t, err, tt.wantErr)
+			}
 			if gotWriter := writer.String(); gotWriter != tt.wantWriter {
 				t.Errorf("methodStream() = %v, want %v", gotWriter, tt.wantWriter)
 			}
