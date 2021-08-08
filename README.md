@@ -65,3 +65,4 @@ func MustBlah(s int, a Foo) int {
 - [x] Works with external types
 - [x] Include regex
 - [x] Exclude regex
+- [x] Variadic functions

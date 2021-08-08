@@ -8,6 +8,7 @@ import (
 	"go/printer"
 	"go/token"
 	"log"
+	"strings"
 	"text/template"
 	"unicode"
 
@@ -20,7 +21,7 @@ func FunctionFromDecl(decl *ast.FuncDecl, fset *token.FileSet) Function {
 	a := Function{Name: decl.Name.Name}
 	for _, e := range decl.Type.Params.List {
 		a.Params = append(a.Params, Param{
-			Name: fmt.Sprintf("%s", e.Names[0].Name),
+			Name: e.Names[0].Name,
 			Type: NodeAsString(fset, e.Type),
 		})
 	}
@@ -52,6 +53,13 @@ func NodeAsStringFunc(fset *token.FileSet) func(v interface{}) string {
 type Param struct {
 	Name string
 	Type string
+}
+
+func (p Param) Variadic() string {
+	if strings.HasPrefix(p.Type, "...") {
+		return "..."
+	}
+	return ""
 }
 
 type Params []Param

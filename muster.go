@@ -11,6 +11,7 @@ import (
 	"log"
 	"os"
 	"path"
+	"regexp"
 	"strings"
 
 	"github.com/iancoleman/strcase"
@@ -18,7 +19,9 @@ import (
 )
 
 var (
-	stream = flag.Bool("stream", false, "use stdin/stdout instead of writing to file")
+	stream  = flag.Bool("stream", false, "use stdin/stdout instead of writing to file")
+	include = flag.String("include", "", "only include functions that match this regex")
+	exclude = flag.String("exclude", "", "exclude all functions that match this regex, separated with commas")
 )
 
 // Usage is a replacement usage function for the flags package.
@@ -31,6 +34,20 @@ func main() {
 	log.SetPrefix("stringer: ")
 	flag.Usage = Usage
 	flag.Parse()
+	var includere, excludere *regexp.Regexp
+	var err error
+	if *include != "" {
+		includere, err = regexp.Compile(*include)
+		if err != nil {
+			log.Fatal("invalid regex: ", *include)
+		}
+	}
+	if *exclude != "" {
+		excludere, err = regexp.Compile(*exclude)
+		if err != nil {
+			log.Fatal("invalid regex: ", *exclude)
+		}
+	}
 	var tags []string
 
 	// We accept either one directory or a list of files. Which do we have?
@@ -40,17 +57,17 @@ func main() {
 		args = []string{"."}
 	}
 	if *stream {
-		if err := methodStream(os.Stdin, os.Stdout); err != nil {
+		if err := methodStream(os.Stdin, os.Stdout, includere, excludere); err != nil {
 			log.Fatal(err)
 		}
 	} else {
-		if err := methodFiles(tags, args); err != nil {
+		if err := methodFiles(tags, args, includere, excludere); err != nil {
 			log.Fatal(err)
 		}
 	}
 }
 
-func methodFiles(tags []string, args []string) error {
+func methodFiles(tags []string, args []string, include *regexp.Regexp, exclude *regexp.Regexp) error {
 	pkgs := parseFiles(tags, args)
 	// Run generate for each file.
 	for i, file := range pkgs[0].Syntax {
@@ -58,7 +75,7 @@ func methodFiles(tags []string, args []string) error {
 		if strings.Contains(filename, "_must.go") {
 			continue
 		}
-		contents, ok, err := generate(pkgs[0].Fset, file)
+		contents, ok, err := generate(pkgs[0].Fset, file, include, exclude)
 		if !ok {
 			continue
 		}
@@ -73,7 +90,7 @@ func methodFiles(tags []string, args []string) error {
 	return nil
 }
 
-func methodStream(reader io.Reader, writer io.Writer) error {
+func methodStream(reader io.Reader, writer io.Writer, include *regexp.Regexp, exclude *regexp.Regexp) error {
 	stdin, err := io.ReadAll(reader)
 	if err != nil {
 		log.Fatal(err)
@@ -82,7 +99,7 @@ func methodStream(reader io.Reader, writer io.Writer) error {
 	if err != nil {
 		log.Fatal(err)
 	}
-	contents, ok, err := generate(fset, file)
+	contents, ok, err := generate(fset, file, include, exclude)
 	if !ok {
 		return fmt.Errorf("unable to generate file")
 	}
@@ -105,7 +122,6 @@ func parseStrings(content string) (*token.FileSet, *ast.File, error) {
 
 func parseFiles(tags []string, args []string) []*packages.Package {
 	cfg := &packages.Config{
-		Mode:       packages.LoadSyntax,
 		Tests:      false,
 		BuildFlags: []string{fmt.Sprintf("-tags=%s", strings.Join(tags, " "))},
 	}
@@ -120,8 +136,8 @@ func parseFiles(tags []string, args []string) []*packages.Package {
 }
 
 // generate produces the String method for the named type.
-func generate(fset *token.FileSet, file *ast.File) (string, bool, error) {
-	funcdecl, ok := GenerateFunction(fset, file)
+func generate(fset *token.FileSet, file *ast.File, include *regexp.Regexp, exclude *regexp.Regexp) (string, bool, error) {
+	funcdecl, ok := GenerateFunction(fset, file, include, exclude)
 	if !ok {
 		return "", ok, nil
 	}
@@ -145,9 +161,9 @@ import (
 	return imported, ok, err
 }
 
-func GenerateFunction(fset *token.FileSet, file *ast.File) (string, bool) {
+func GenerateFunction(fset *token.FileSet, file *ast.File, include *regexp.Regexp, exclude *regexp.Regexp) (string, bool) {
 	var b bytes.Buffer
-	ast.Inspect(file, genDecl(&b, fset))
+	ast.Inspect(file, genDecl(&b, fset, include, exclude))
 	function := b.String()
 	if function == "" {
 		return "", false
@@ -156,7 +172,7 @@ func GenerateFunction(fset *token.FileSet, file *ast.File) (string, bool) {
 }
 
 // genDecl processes one declaration clause.
-func genDecl(writer io.Writer, fset *token.FileSet) func(ast.Node) bool {
+func genDecl(writer io.Writer, fset *token.FileSet, include *regexp.Regexp, exclude *regexp.Regexp) func(ast.Node) bool {
 	return func(node ast.Node) bool {
 		decl, ok := node.(*ast.FuncDecl)
 		if !ok {
@@ -174,11 +190,21 @@ func genDecl(writer io.Writer, fset *token.FileSet) func(ast.Node) bool {
 		if NodeAsString(fset, decl.Type.Results.List[1].Type) != "error" {
 			return true
 		}
+		if include != nil {
+			if !include.MatchString(NodeAsString(fset, decl)) {
+				return true
+			}
+		}
+		if exclude != nil {
+			if exclude.MatchString(NodeAsString(fset, decl)) {
+				return true
+			}
+		}
 		call := FunctionFromDecl(decl, fset)
 		must := call
 		var err error
 		must.Body, err = WithTemplate(
-			`val, err := {{if ne .Recv.Name ""}}{{.Recv.Name}}.{{end}}{{.Name}}({{ range $i, $e := .Params }}{{$e.Name}}, {{end}})
+			`val, err := {{if ne .Recv.Name ""}}{{.Recv.Name}}.{{end}}{{.Name}}({{ range $i, $e := .Params }}{{$e.Name}}{{$e.Variadic}}, {{end}})
 	if err != nil {
 		panic(err)
 	}
@@ -194,7 +220,7 @@ func genDecl(writer io.Writer, fset *token.FileSet) func(ast.Node) bool {
 		}
 		must.Returns = must.Returns[:len(must.Returns)-1]
 		must.Comment = fmt.Sprintf("// %s calls %s and panics if err is not nil.", must.Name, call.Name)
-		writer.Write([]byte(must.String()))
+		_, _ = writer.Write([]byte(must.String()))
 		return false
 	}
 }
