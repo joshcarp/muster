@@ -122,6 +122,7 @@ func parseStrings(content string) (*token.FileSet, *ast.File, error) {
 
 func parseFiles(tags []string, args []string) []*packages.Package {
 	cfg := &packages.Config{
+		Mode:       packages.NeedName | packages.NeedFiles | packages.NeedCompiledGoFiles | packages.NeedImports | packages.NeedTypes | packages.NeedTypesSizes | packages.NeedSyntax | packages.NeedTypesInfo,
 		Tests:      false,
 		BuildFlags: []string{fmt.Sprintf("-tags=%s", strings.Join(tags, " "))},
 	}
