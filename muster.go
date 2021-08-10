@@ -148,6 +148,7 @@ package {{file.Name.Name}}
 import (
 {{range $j, $import := file.Imports}}
 {{NodeAsString $import}}{{end}})
+
 {{.}}
 `
 	result, err := WithTemplate(tmpl, funcdecl,
