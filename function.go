@@ -32,7 +32,11 @@ func FunctionFromDecl(decl *ast.FuncDecl, fset *token.FileSet) Function {
 	}
 	if decl.Recv != nil && len(decl.Recv.List) > 0 {
 		a.Recv.Type = NodeAsString(fset, decl.Recv.List[0].Type)
-		a.Recv.Name = NodeAsString(fset, decl.Recv.List[0].Names[0])
+		if len(decl.Recv.List[0].Names) > 0 {
+			a.Recv.Name = NodeAsString(fset, decl.Recv.List[0].Names[0])
+		} else {
+			a.Recv.Name = "_recv"
+		}
 	}
 	return a
 }
@@ -117,8 +121,8 @@ func (f Function) IsExported() bool {
 		return false
 	}
 	return unicode.IsUpper(rune(f.Name[0]))
-
 }
+
 func (f Function) String() string {
 	str, err := WithTemplate(`{{.Comment}}
 func {{.Recv}}{{.Name}}({{.Params}})({{.Returns}}){

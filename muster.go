@@ -82,7 +82,7 @@ func methodFiles(tags []string, args []string, include *regexp.Regexp, exclude *
 		if err != nil {
 			return err
 		}
-		err = os.WriteFile(strings.ReplaceAll(filename, ".go", "_must.go"), []byte(contents), 0644)
+		err = os.WriteFile(strings.ReplaceAll(filename, ".go", "_must.go"), []byte(contents), 0o644)
 		if err != nil {
 			return err
 		}
@@ -117,7 +117,6 @@ func parseStrings(content string) (*token.FileSet, *ast.File, error) {
 		return nil, nil, err
 	}
 	return fset, file, nil
-
 }
 
 func parseFiles(tags []string, args []string) []*packages.Package {
